@@ -15,6 +15,10 @@
  */
 package nctu.winlab.unicastdhcp;
 
+import static org.onosproject.net.config.NetworkConfigEvent.Type.CONFIG_ADDED;
+import static org.onosproject.net.config.NetworkConfigEvent.Type.CONFIG_UPDATED;
+import static org.onosproject.net.config.basics.SubjectFactories.APP_SUBJECT_FACTORY;
+
 import com.google.common.collect.ImmutableSet;
 import org.onosproject.cfg.ComponentConfigService;
 import org.osgi.service.component.ComponentContext;
