@@ -1,83 +1,70 @@
-/*
- * Copyright 2020-present Open Networking Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package nctu.winlab.unicastdhcp;
 
 import static org.onosproject.net.config.NetworkConfigEvent.Type.CONFIG_ADDED;
 import static org.onosproject.net.config.NetworkConfigEvent.Type.CONFIG_UPDATED;
 import static org.onosproject.net.config.basics.SubjectFactories.APP_SUBJECT_FACTORY;
 
-import com.google.common.collect.ImmutableSet;
-import org.onosproject.cfg.ComponentConfigService;
-import org.osgi.service.component.ComponentContext;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.config.ConfigFactory;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigRegistry;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
-import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Dictionary;
-import java.util.Properties;
+@Component(immediate = true)
+public class AppComponent {
 
-import static org.onlab.util.Tools.get;
-
-/**
- * Skeletal ONOS application component.
- */
-@Component(immediate = true,
-           service = {SomeInterface.class},
-           property = {
-               "someProperty=Some Default String Value",
-           })
-public class AppComponent implements SomeInterface {
-
-    private final Logger log = LoggerFactory.getLogger(getClass());
-
-    /** Some configurable property. */
-    private String someProperty;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    protected ComponentConfigService cfgService;
-
-    @Activate
-    protected void activate() {
-        cfgService.registerProperties(getClass());
-        log.info("Started");
-    }
-
-    @Deactivate
-    protected void deactivate() {
-        cfgService.unregisterProperties(getClass(), false);
-        log.info("Stopped");
-    }
-
-    @Modified
-    public void modified(ComponentContext context) {
-        Dictionary<?, ?> properties = context != null ? context.getProperties() : new Properties();
-        if (context != null) {
-            someProperty = get(properties, "someProperty");
+  private final Logger log = LoggerFactory.getLogger(getClass());
+  private final NameConfigListener cfgListener = new NameConfigListener();
+  private final ConfigFactory factory =
+      new ConfigFactory<ApplicationId, NameConfig>(
+          APP_SUBJECT_FACTORY, NameConfig.class, "UnicastDhcpConfig") {
+        @Override
+        public NameConfig createConfig() {
+          return new NameConfig();
         }
-        log.info("Reconfigured");
-    }
+      };
 
+  private ApplicationId appId;
+
+  @Reference(cardinality = ReferenceCardinality.MANDATORY)
+  protected NetworkConfigRegistry cfgService;
+
+  @Reference(cardinality = ReferenceCardinality.MANDATORY)
+  protected CoreService coreService;
+
+  @Activate
+  protected void activate() {
+    appId = coreService.registerApplication("nctu.winlab.unicastdhcp");
+    cfgService.addListener(cfgListener);
+    cfgService.registerConfigFactory(factory);
+    log.info("Started");
+  }
+
+  @Deactivate
+  protected void deactivate() {
+    cfgService.removeListener(cfgListener);
+    cfgService.unregisterConfigFactory(factory);
+    log.info("Stopped");
+  }
+
+  private class NameConfigListener implements NetworkConfigListener {
     @Override
-    public void someMethod() {
-        log.info("Invoked");
+    public void event(NetworkConfigEvent event) {
+      if ((event.type() == CONFIG_ADDED || event.type() == CONFIG_UPDATED)
+          && event.configClass().equals(NameConfig.class)) {
+        NameConfig config = cfgService.getConfig(appId, NameConfig.class);
+        if (config != null) {
+          log.info("It is {}!", config.name());
+        }
+      }
     }
-
+  }
 }
