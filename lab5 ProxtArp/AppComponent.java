@@ -66,7 +66,7 @@ public class AppComponent {
 
     private class ProxyProcessor implements PacketProcessor {
         Ethernet req;
-        ConnectPoint srcConnectPoint ;
+        ConnectPoint srcConnectPoint;
 
         @Override
         public void process(PacketContext pc) {
@@ -76,39 +76,34 @@ public class AppComponent {
                 Ip4Address srcip = Ip4Address.valueOf(arpPacket.getSenderProtocolAddress());
                 Ip4Address dstip = Ip4Address.valueOf(arpPacket.getTargetProtocolAddress());
                 MacAddress srcmac = eth.getSourceMAC();
+                arpTable.put(srcip, srcmac);
                 if (arpPacket.getOpCode() == ARP.OP_REQUEST) {
                     req = eth;
-                    srcConnectPoint=pc.inPacket().receivedFrom();
-                    log.info("request");
+                    srcConnectPoint = pc.inPacket().receivedFrom();
                     if (!arpTable.containsKey(dstip)) {
                         log.info("TABLE MISS. Send request to edge ports");
                         pc.treatmentBuilder().setOutput(PortNumber.FLOOD);
                         pc.send();
-                        process(pc);
                     } else {
-                        log.info("YES");
-                        Ethernet ethReply = ARP.buildArpReply(dstip, arpTable.get(dstip), req);
-                        TrafficTreatment.Builder builder = DefaultTrafficTreatment.builder();
-                        builder.setOutput(srcConnectPoint.port());
-                        packetService.emit(new DefaultOutboundPacket(srcConnectPoint.deviceId(), builder.build(),
-                                ByteBuffer.wrap(ethReply.serialize())));
-
+                        log.info("TABLE HIT. Requested MAC = {}", srcmac);
+                        ReplyARP(req, srcConnectPoint);
                     }
                 } else if (arpPacket.getOpCode() == ARP.OP_REPLY) {
-                    addARP(srcip, srcmac);
-                    log.info("get REPLY ");
+                    MacAddress dstmac = eth.getDestinationMAC();
+                    log.info("RECV REPLY. Requested MAC = {}", dstmac);
                 }
-
             }
-
-            // log.info("ETH: {}",IPv4.toIPv4Address(arpPacket.getSenderProtocolAddress()));
-
         }
 
-        private void addARP(Ip4Address ip, MacAddress srcMac) {
-            arpTable.putIfAbsent(ip, srcMac);
-            log.info("Add IP address: {},MAC: {}", ip, srcMac);
-
+        private void ReplyARP(Ethernet req, ConnectPoint srcConnectPoint) {
+            ARP arpPacket = (ARP) req.getPayload();
+            Ip4Address dstip = Ip4Address.valueOf(arpPacket.getTargetProtocolAddress());
+            Ethernet ethReply = ARP.buildArpReply(dstip, arpTable.get(dstip), req);
+            TrafficTreatment.Builder builder = DefaultTrafficTreatment.builder();
+            builder.setOutput(srcConnectPoint.port());
+            packetService.emit(new DefaultOutboundPacket(srcConnectPoint.deviceId(), builder.build(),
+                    ByteBuffer.wrap(ethReply.serialize())));
         }
+
     }
 }
